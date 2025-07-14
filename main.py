@@ -1,4 +1,3 @@
-
 MASTER_ACCOUNT_ID = "000000000000"
 ROLE_NAME = "MyRole"
 
@@ -37,6 +36,7 @@ def create_session(accountNo, region):
 # Get all ACTIVE AWS accounts under the organization
 def getAccounts(master_account):
     accounts = []
+    # NOTE: Organizations is a global service; region here is just to satisfy boto3 session
     session = create_session(master_account, "us-west-2")
     if session is None:
         return []
@@ -75,20 +75,20 @@ def get_stopped_instances(account_id, region):
 
     try:
         print(f"[~] Checking stopped instances in {region} of {account_id}")
-        response = client.describe_instances(
+        paginator = client.get_paginator('describe_instances')
+        for page in paginator.paginate(
             Filters=[{'Name': 'instance-state-name', 'Values': ['stopped']}]
-        )
-
-        for reservation in response['Reservations']:
-            for instance in reservation['Instances']:
-                instance_id = instance['InstanceId']
-                launch_time = str(instance['LaunchTime'])
-                stopped_instances.append({
-                    "AccountId": account_id,
-                    "Region": region,
-                    "InstanceId": instance_id,
-                    "LaunchTime": launch_time
-                })
+        ):
+            for reservation in page['Reservations']:
+                for instance in reservation['Instances']:
+                    instance_id = instance['InstanceId']
+                    launch_time = instance['LaunchTime'].isoformat()
+                    stopped_instances.append({
+                        "AccountId": account_id,
+                        "Region": region,
+                        "InstanceId": instance_id,
+                        "LaunchTime": launch_time
+                    })
         print(f"[+] Found {len(stopped_instances)} stopped instances in {region} of {account_id}")
         return stopped_instances
 
@@ -109,7 +109,7 @@ for account in accounts:
 
 # Save result
 output_path = './StoppedInstances.json'
-with open(output_path, 'w+') as f:
+with open(output_path, 'w') as f:
     f.write(json.dumps(AllStoppedInstances, indent=4))
 
 print(f"\n✅ Done! Stopped instance data written to: {output_path}")
